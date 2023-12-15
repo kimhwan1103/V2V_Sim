@@ -130,8 +130,8 @@ def CAM_send(CAM_size, periodicity,vehicle_id , speed, position, lane):
         return cam_msg
 
 #CAM 메시지 수신
-def CAM_receive():
-    pass
+def CAM_receive(cam_msg):
+    print(cam_msg)
 
 #스케줄링
 def scheduling():
