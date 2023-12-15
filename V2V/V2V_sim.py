@@ -1,6 +1,7 @@
 import simpy 
 import numpy as np
-import random 
+import random
+import time
 
 '''
 1. 각 차량의 랜덤으로 차선 변경하여 초기 위치에 생성 (완료)
@@ -122,7 +123,14 @@ def Emergency_msg():
     pass
 
 #CAM 메시지 전송
-def CAM_send(CAM_size, periodicity):
+def CAM_send(CAM_size, periodicity,vehicle_id , speed, position, lane):
+    while True:
+        cam_msg = {'vehicle_id': vehicle_id, 'speed' : speed, 'position' : position, 'lane' : lane}
+        time.sleep(periodicity)
+        return cam_msg
+
+#CAM 메시지 수신
+def CAM_receive():
     pass
 
 #스케줄링
