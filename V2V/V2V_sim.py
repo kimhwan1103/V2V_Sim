@@ -42,6 +42,9 @@ sucess_packet = 0
 
 vehicle_states = {}
 
+#사고 차량 리스트
+crashed_vehicles = []
+
 def vehicle(env, name, initial_position, time_interval):
     global vehicle_states, total_packet, sucess_packet
 
@@ -55,12 +58,16 @@ def vehicle(env, name, initial_position, time_interval):
     executed = False
     executed2 = False
     cam = None
+    emergency_received = False  # 긴급 메시지 수신 여부
 
     while True:
         #충돌이 없는 경우 위치 업데이트
         if not crashed:
             position += speed * time_interval / 3600
-
+        else:
+            #print(f"{bcolors.FAIL}{name} 사고 발생, 사고 위치 {position} {bcolors.ENDC}")
+            pass 
+        
         vehicle_states[name] = {'position' : position, 'speed' : speed, 'lane' : lane}
         cam = send_cam(name, vehicle_states[name])
 
@@ -70,10 +77,14 @@ def vehicle(env, name, initial_position, time_interval):
             if name != other_name and lane == other_state['lane']:
                 ttc_value = calculate_ttc(position, speed, other_state['position'], other_state['speed'])
                 other_vehicle = other_name
-                if ttc_value < 0.4:
+                if ttc_value < 0.3:
                     print(f"{bcolors.WARNING}Emergency TTC Vehicle : {name} | Other Vehicle : {other_name}{bcolors.ENDC}")
-                if ttc_value <= 0.3:
+                if ttc_value <= 0.1:
                     print(f"{bcolors.FAIL}Vehicle Crash {name} : {other_name}{bcolors.ENDC}")
+                    crashed = True
+                    send_emergency_msg(other_name, other_state)
+                    if name not in crashed_vehicles:
+                        crashed_vehicles.append(name)
         
         #OOC 구역 함수
         if doca_start <= position <= doca_end:
@@ -93,12 +104,20 @@ def vehicle(env, name, initial_position, time_interval):
             executed2 = True
         else:
             print_vehicle_status(name, position, lane, "Not DOCA", resource_id, speed, ttc_value, other_vehicle, crashed)
-        
+            
         for other_name, other_state in vehicle_states.items():
             if other_name != name:
-                receive_cam(name, other_name, other_state, 300)
+                receive_msg = receive_cam(name, other_name, other_state, 300)
+                if receive_msg == "emeragency_received":
+                    emergency_received = True
             else:
-                print(f"{bcolors.FAIL} cam recive FAIL {bcolors.ENDC}")
+                #print(f"{bcolors.FAIL} cam recive FAIL {bcolors.ENDC}")
+                pass 
+
+        if emergency_received and not crashed:
+            if lane < 4:
+                lane += 1
+                print(f"{bcolors.OKGREEN}{name} is changing lane to {lane} due to emergency{bcolors.ENDC}")
 
         # 시간 간격에 따라 대기
         yield env.timeout(random.expovariate(1.0 / (2.5 * time_interval)))
@@ -126,8 +145,16 @@ def calculate_ttc(pos1, speed1, pos2, speed2):
     return distance / relative_speed
 
 #긴급 메시지 
-def Emergency_msg():
-    pass
+def cerate_emergency_msg(vehicle_id, state):
+    return {'vehicle_id': vehicle_id, 'position': state['position'], 'speed': state['speed'], 'lane': state['lane'], 'crached' : state['crashed']}
+
+#긴급 메시지 전송
+def send_emergency_msg(vehicle_id, state):
+    global total_packet
+    emergency_msg = create_cam(vehicle_id, state)
+    print(f"CAM : {emergency_msg}")
+    total_packet += 1
+    return emergency_msg
 
 #거리 계산
 def calculate_distance(position1, position2):
@@ -154,7 +181,12 @@ def receive_cam(receiver_name, sender_name, message, max_range):
     sender_position = message['position']
     receiver_position = vehicle_states[receiver_name]['position']
     if is_within_range(receiver_position, sender_position, max_range):
-        print(f"{receiver_name} received a CAM from {sender_name}: {message}")
+        if 'crashed' in message and message['crashed']:
+            print(f"{receiver_name} received an emergency message from {sender_name}")
+            return "emeragency_received"
+        else:
+            print(f"{receiver_name} received a CAM from {sender_name}: {message}")
+        #print(f"{receiver_name} received a CAM from {sender_name}: {message}")
         sucess_packet += 1
         received_messages.add(message_id)
 
@@ -200,3 +232,4 @@ print(available_resources)
 print(f"total packet : {total_packet} | sucess packet : {sucess_packet}")
 packet = prr()
 print(f"PRR : {packet}")
+print(f"Crashed Vehicles : {crashed_vehicles}")
