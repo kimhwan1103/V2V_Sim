@@ -10,9 +10,9 @@ import time
 4. DOCA 탈출 후 리소스 해제 (완료)
 5. DOCA에 주행시 메시지 전송 (V2V) (완료)
 6. 주행시 같이 TCC 점수 계산 (완료)
-7. TTC점수가 일정 점수에 도달하면 주의 메시지 브로드 캐스트 
+7. TTC점수가 일정 점수에 도달하면 주의 메시지 브로드 캐스트 (완료)
 8. 브로드 캐스트 이후 리스케줄링 진행 
-9. 사고 발생시 리스케줄링 된 리소스로 안전메시지 브로드 캐스트 전송
+9. 사고 발생시 리스케줄링 된 리소스로 안전메시지 브로드 캐스트 전송 (완료) (긴급 메시지 수신 부분 오류 발생)
 10. 사고 발생시 차량 정지 (진행 중)
 11. PRR 값 계산 (완료)
 '''
@@ -64,11 +64,14 @@ def vehicle(env, name, initial_position, time_interval):
         #충돌이 없는 경우 위치 업데이트
         if not crashed:
             position += speed * time_interval / 3600
+            if emergency_received == True:
+                lane += 1
+                print(f"{bcolors.OKGREEN}{name} is changing lane to {lane} due to emergency{bcolors.ENDC}")
         else:
             #print(f"{bcolors.FAIL}{name} 사고 발생, 사고 위치 {position} {bcolors.ENDC}")
             pass 
         
-        vehicle_states[name] = {'position' : position, 'speed' : speed, 'lane' : lane}
+        vehicle_states[name] = {'position' : position, 'speed' : speed, 'lane' : lane, 'crashed' :crashed}
         cam = send_cam(name, vehicle_states[name])
 
         #다른 차량과의 충돌 및 TTC 계산
@@ -108,16 +111,14 @@ def vehicle(env, name, initial_position, time_interval):
         for other_name, other_state in vehicle_states.items():
             if other_name != name:
                 receive_msg = receive_cam(name, other_name, other_state, 300)
+                print(receive_msg)
+                print(other_state['crashed'])
                 if receive_msg == "emeragency_received":
                     emergency_received = True
+                    #rint("사고 발생!")
             else:
                 #print(f"{bcolors.FAIL} cam recive FAIL {bcolors.ENDC}")
                 pass 
-
-        if emergency_received and not crashed:
-            if lane < 4:
-                lane += 1
-                print(f"{bcolors.OKGREEN}{name} is changing lane to {lane} due to emergency{bcolors.ENDC}")
 
         # 시간 간격에 따라 대기
         yield env.timeout(random.expovariate(1.0 / (2.5 * time_interval)))
@@ -182,7 +183,7 @@ def receive_cam(receiver_name, sender_name, message, max_range):
     receiver_position = vehicle_states[receiver_name]['position']
     if is_within_range(receiver_position, sender_position, max_range):
         if 'crashed' in message and message['crashed']:
-            print(f"{receiver_name} received an emergency message from {sender_name}")
+            print(f"{bcolors.OKBLUE}{receiver_name} received an emergency message from {sender_name}{bcolors.ENDC}")
             return "emeragency_received"
         else:
             print(f"{receiver_name} received a CAM from {sender_name}: {message}")
